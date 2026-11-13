@@ -40,7 +40,7 @@ jobs:
           curl --fail --silent --show-error --location --proto '=https' --output "$RUNNER_TEMP/ascout.tgz" "$url"
           echo "${ASCOUT_SHA256}  $RUNNER_TEMP/ascout.tgz" | sha256sum --check --strict -
           npm install --global --ignore-scripts --no-audit --no-fund "$RUNNER_TEMP/ascout.tgz"
-          ascout --version
+          command -v ascout
       - name: Collect evidence for the pull request's changes
         env:
           PR_HEAD: ${{ github.event.pull_request.head.sha }}

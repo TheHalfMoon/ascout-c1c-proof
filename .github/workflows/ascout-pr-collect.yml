@@ -1,0 +1,63 @@
+name: Ascout PR Collect
+
+# Unprivileged half: runs pull request code (this repository's tests, through `check`) with a
+# read-only token and no secrets, and uploads an evidence bundle. "Ascout PR Publish" turns that
+# into a Check Run from default-branch code, as this repository's GitHub App.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ascout-pr-collect-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  collect:
+    name: ascout collect
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - name: Install this repository's exact lockfile
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Install the pinned Ascout release
+        env:
+          ASCOUT_VERSION: "0.3.0"
+          ASCOUT_SHA256: "571f33acebc601d4ddf54cc139de789532f0fab88f57dbfeef053cc3e311708d"
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://github.com/TheHalfMoon/Ascout/releases/download/v${ASCOUT_VERSION}/thehalfmoon-ascout-${ASCOUT_VERSION}.tgz"
+          curl --fail --silent --show-error --location --proto '=https' --output "$RUNNER_TEMP/ascout.tgz" "$url"
+          echo "${ASCOUT_SHA256}  $RUNNER_TEMP/ascout.tgz" | sha256sum --check --strict -
+          npm install --global --ignore-scripts --no-audit --no-fund "$RUNNER_TEMP/ascout.tgz"
+          ascout --version
+      - name: Collect evidence for the pull request's changes
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+        shell: bash
+        run: |
+          base=$(git merge-base "$PR_BASE" "$PR_HEAD")
+          git reset -q --soft "$base"
+          set +e
+          ascout pr-evidence --pr-head "$PR_HEAD" > "$RUNNER_TEMP/ascout-pr-evidence.json"
+          code=$?
+          set -e
+          echo "ascout pr-evidence exited $code (0 complete, 1 findings, 2 error, 3 drift, 4 incomplete)"
+          test -s "$RUNNER_TEMP/ascout-pr-evidence.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ascout-pr-evidence
+          path: ${{ runner.temp }}/ascout-pr-evidence.json
+          if-no-files-found: error
+          retention-days: 7

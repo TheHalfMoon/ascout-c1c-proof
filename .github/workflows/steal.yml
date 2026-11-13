@@ -1,0 +1,22 @@
+name: Key read attempt
+# C1c adversarial test: jobs that name the key environment from a PR, from a push to a non-default
+# branch, and from workflow_dispatch on a non-default branch. The environment allows only main, so
+# every one must be refused before it starts. Nothing secret is ever printed: only whether it is set.
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  steal:
+    runs-on: ubuntu-24.04
+    environment: ascout-publish
+    steps:
+      - name: Report whether the App key reached this job
+        env:
+          KEY: ${{ secrets.ASCOUT_APP_PRIVATE_KEY }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ -n "$KEY" ]; then echo "KEY REACHED A $EVENT JOB"; exit 1; else echo "job ran on $EVENT, key empty"; fi

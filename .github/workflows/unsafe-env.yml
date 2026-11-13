@@ -1,0 +1,20 @@
+name: Unsafe environment demonstration
+# C1c: shows why "Protected branches only" is unsafe when the repository has no branch protection
+# rules. A push to any branch reaches this environment's secret, a random canary (not a credential).
+# Only a SHA-256 prefix of it is printed.
+on:
+  push:
+    branches-ignore: [main]
+permissions:
+  contents: read
+jobs:
+  reach:
+    runs-on: ubuntu-24.04
+    environment: c1c-unsafe-protected-only
+    steps:
+      - name: Report whether the canary reached a non-default branch
+        env:
+          CANARY: ${{ secrets.C1C_CANARY }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          if [ -n "$CANARY" ]; then echo "canary reached branch $BRANCH, sha256 prefix $(printf %s "$CANARY" | sha256sum | cut -c1-16)"; else echo "canary did not reach branch $BRANCH"; fi
